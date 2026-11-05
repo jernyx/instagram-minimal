@@ -2,8 +2,6 @@
 
 A patched Instagram APK that blocks ads, suggested content, the feed, stories, explore, and reels. Built on the [Morphe](https://morphe.software) patching framework.
 
-Currently targets **Instagram 454.0.0.13.77**.
-
 ---
 
 ## First-time setup (Arch Linux)
