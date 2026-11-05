@@ -1,6 +1,6 @@
 # Instagram Minimal
 
-A patched Instagram APK that blocks ads, suggested content, the feed, stories, explore, and reels — with runtime toggles so you can turn each one on or off without rebuilding. Built on the [Morphe](https://morphe.software) patching framework.
+A patched Instagram APK that blocks ads, suggested content, the feed, stories, explore, and reels. Built on the [Morphe](https://morphe.software) patching framework.
 
 Currently targets **Instagram 454.0.0.13.77**.
 
