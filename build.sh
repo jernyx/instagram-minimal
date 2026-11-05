@@ -27,7 +27,8 @@ set -euo pipefail
 # matches nothing makes the whole substitution fail, and `set -e` would abort the
 # script before the "not found" message it is meant to feed could ever print.
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLI="$(ls -t "$DIR"/tools/morphe-cli-*.jar 2>/dev/null | head -1 || true)"
+# The CLI jar was renamed morphe-cli-* -> morphe-desktop-* upstream at 1.11; accept both.
+CLI="$(ls -t "$DIR"/tools/morphe-cli-*.jar "$DIR"/tools/morphe-desktop-*.jar 2>/dev/null | head -1 || true)"
 OUT="$DIR/instagram.apk"
 
 # Morphe's Android Gradle plugin targets JDK 17-21; pin to 21 so the build does
@@ -46,13 +47,20 @@ fi
 
 # The extension is an Android library, so the Android SDK must be locatable.
 if [ -z "${ANDROID_HOME:-}" ]; then
-    for sdk in "$HOME/Library/Android/sdk" "$HOME/Android/Sdk" "${ANDROID_SDK_ROOT:-}"; do
+    for sdk in "$HOME/Library/Android/sdk" "$HOME/Android/Sdk" \
+        "/opt/homebrew/share/android-commandlinetools" "/usr/local/share/android-commandlinetools" \
+        "${ANDROID_SDK_ROOT:-}"; do
         if [ -n "$sdk" ] && { [ -d "$sdk/platform-tools" ] || [ -d "$sdk/build-tools" ]; }; then
             export ANDROID_HOME="$sdk"
             break
         fi
     done
 fi
+
+# Run every JVM tool with the pinned JDK rather than whatever `java` is on PATH
+# (Homebrew often puts a JDK 17 there, which the patcher rejects).
+JAVA_BIN="${JAVA_HOME:+$JAVA_HOME/bin/java}"
+JAVA_BIN="${JAVA_BIN:-java}"
 
 # Signing material. apksigner ships with the Android SDK build-tools.
 KEYSTORE="${INSTAGRAM_KEYSTORE:-$DIR/instagram.keystore}"
@@ -78,7 +86,7 @@ if [ -z "$APK" ] || [ ! -f "$APK" ]; then
     exit 1
 fi
 if [ -z "$CLI" ]; then
-    echo "Error: Morphe CLI not found under tools/ (morphe-cli-*.jar)." >&2
+    echo "Error: Morphe CLI not found under tools/ (morphe-cli-*.jar / morphe-desktop-*.jar)." >&2
     exit 1
 fi
 
@@ -101,7 +109,7 @@ case "$APK" in
             # The bundle holds base.apk plus feature/density splits; -f overwrites
             # a stale merge. Instagram's is ~400 MB, so give the JVM room. The
             # per-file merge log is noisy, so keep it on disk rather than inline.
-            if ! java -Xmx4g -jar "$EDITOR" m -f -i "$APK" -o "$MERGED" > "$MERGED.log" 2>&1; then
+            if ! "$JAVA_BIN" -Xmx4g -jar "$EDITOR" m -f -i "$APK" -o "$MERGED" > "$MERGED.log" 2>&1; then
                 echo "Error: APKEditor failed to merge $(basename "$APK")." >&2
                 echo "       Log: $MERGED.log" >&2
                 exit 1
@@ -143,7 +151,7 @@ if [ -n "${INSTAGRAM_KEYSTORE_PASS:-}" ]; then
     ARGS+=(--unsigned)
 fi
 ARGS+=("$APK")
-java "${ARGS[@]}"
+"$JAVA_BIN" "${ARGS[@]}"
 
 if [ "$SIGN_WITH_APKSIGNER" -eq 1 ]; then
     echo "    signing with apksigner ($(basename "$KEYSTORE"), alias $KEY_ALIAS)"

@@ -56,10 +56,7 @@ public final class Block {
             "clips_netego",
             "stories_netego",
             "bloks_netego",
-            "in_feed_survey",
-            "suggested_users",
-            "suggested_top_accounts",
-            "suggested_igd_channels",
+            "ad4ad",
     };
 
     /**
@@ -68,6 +65,22 @@ public final class Block {
      * "unknown FeedItem type" branch and is dropped without a crash.
      */
     private static final String INVALID_FEED_TYPE = "instagram_blocked";
+
+    /**
+     * Media JSON field names that only appear on sponsored posts. When any of
+     * these is seen during a media parse, the media is flagged as an ad so
+     * filterFeedMedia can drop it.
+     */
+    private static final String[] AD_MEDIA_FIELDS = {
+            "ad_header_style",
+            "ad_link_type",
+            "ad_action",
+            "ad_id",
+            "advertiser_id",
+    };
+
+    /** Set to true on the current thread while an ad media is being parsed. */
+    private static final ThreadLocal<Boolean> IS_AD_MEDIA = new ThreadLocal<>();
 
     /** Ad-delivery surfaces injected into feed, stories, profile, DMs, explore, commerce. */
     private static final String[] ADS = {
@@ -112,9 +125,8 @@ public final class Block {
         if (Config.isAdsBlocked() && containsAny(path, ADS)) throw blocked();
 
         // --- Always-blocked analytics / commerce ---
-        // No trailing slash: the family has a "_www" sibling
-        // (/feed/injected_reels_media_www/) that a slash-terminated match misses.
-        if (path.contains("/feed/injected_reels_media")
+        // Scoped away from /direct_v2/ so reels shared in DMs still load.
+        if ((path.contains("/feed/injected_reels_media") && !path.startsWith("/direct_v2/"))
                 || path.contains("/logging/")
                 || path.contains("/async_ads_privacy/")
                 || path.contains("/async_critical_notices/")
@@ -144,6 +156,27 @@ public final class Block {
             Log.i("InstaFeed", (drop ? "drop " : "keep ") + key);
         }
         return drop ? INVALID_FEED_TYPE : key;
+    }
+
+    /**
+     * Called from the media deserialiser for every field name it reads.
+     * Marks the current media as an ad if the field is ad-specific.
+     */
+    public static void onMediaField(String fieldName) {
+        if (fieldName == null) return;
+        if (Config.isAdsBlocked() && equalsAny(fieldName, AD_MEDIA_FIELDS)) {
+            IS_AD_MEDIA.set(Boolean.TRUE);
+        }
+    }
+
+    /**
+     * Called from the feed-item deserialiser after each media is parsed.
+     * Returns null (dropping the item) if the media was flagged as an ad.
+     */
+    public static Object filterFeedMedia(Object media) {
+        boolean isAd = Boolean.TRUE.equals(IS_AD_MEDIA.get());
+        IS_AD_MEDIA.remove();
+        return (isAd && Config.isAdsBlocked()) ? null : media;
     }
 
     private static boolean equalsAny(String value, String[] options) {

@@ -5,6 +5,7 @@ import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.instructions
 import app.morphe.patcher.patch.bytecodePatch
 import com.android.tools.smali.dexlib2.Opcode
+import com.android.tools.smali.dexlib2.iface.instruction.Instruction
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.reference.FieldReference
@@ -16,10 +17,21 @@ private const val BLOCK_CLASS = "Lcom/instagram/extension/Block;"
 // TigonServiceLayer is Instagram's network layer; the class name and the
 // startRequest method are not obfuscated and stable across releases, so they
 // anchor the patch without version-specific names.
+//
+// Instagram 451 turned startRequest into a Systrace wrapper and moved its body
+// into startRequestInternal, so the name is matched as a prefix and the method
+// that actually reads the request URI is the one picked.
 internal object TigonStartRequestFingerprint : Fingerprint(
     definingClass = "Lcom/instagram/api/tigon/TigonServiceLayer;",
-    name = "startRequest",
+    custom = { method, _ ->
+        method.name.startsWith("startRequest") &&
+            method.implementation?.instructions?.any { it.isUriLoad() } == true
+    },
 )
+
+private fun Instruction.isUriLoad() =
+    opcode == Opcode.IGET_OBJECT &&
+        ((this as? ReferenceInstruction)?.reference as? FieldReference)?.type == "Ljava/net/URI;"
 
 @Suppress("unused")
 val networkBlockPatch = bytecodePatch(
@@ -38,10 +50,7 @@ val networkBlockPatch = bytecodePatch(
             // type java.net.URI inside the request-sending try block. Inject our
             // check right after it so the thrown IOException is caught as a
             // normal network failure and the blocked surface stays empty.
-            val uriLoad = instructions.first {
-                it.opcode == Opcode.IGET_OBJECT &&
-                    ((it as? ReferenceInstruction)?.reference as? FieldReference)?.type == "Ljava/net/URI;"
-            }
+            val uriLoad = instructions.first { it.isUriLoad() }
             val uriRegister = (uriLoad as OneRegisterInstruction).registerA
 
             addInstructions(
