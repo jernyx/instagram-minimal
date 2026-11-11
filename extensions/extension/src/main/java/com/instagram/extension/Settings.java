@@ -429,6 +429,8 @@ public final class Settings {
                 Config.isProfileGridBlocked());
         addRow(context, surfaces, "Search post results", "block_search_posts",
                 Config.isSearchPostsBlocked());
+        addRow(context, surfaces, "Saved posts", "block_saved",
+                Config.isSavedBlocked());
         sealGroup(context, surfaces);
 
         // Hiding a nav icon also takes its surface out of the landing-page picker,
@@ -816,6 +818,7 @@ public final class Settings {
         if (key.equals("block_notifications")) return "Hide the notifications (heart) button in the feed header.";
         if (key.equals("block_profile_grid")) return "Hide posts on every profile page.";
         if (key.equals("block_search_posts")) return "Hide post results when searching.";
+        if (key.equals("block_saved")) return "Hide the saved posts grid on your profile.";
         if (key.startsWith("nav_show_")) return "Show this icon in the navigation bar.";
         return "Hide this surface in Instagram.";
     }
