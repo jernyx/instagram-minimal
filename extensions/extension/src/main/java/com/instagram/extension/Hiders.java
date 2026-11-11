@@ -60,6 +60,10 @@ public final class Hiders {
                 "tabbed_pager", "search_tab_bar_layout"));
         // "Friends" tab in the Reels viewer header.
         observer.addOnGlobalLayoutListener(new FriendsLaneHider(root));
+        // Saved posts grid (profile → bookmark icon, also reachable from search).
+        observer.addOnGlobalLayoutListener(new VisibilityHider(root, "block_saved",
+                true, false, null,
+                "saved_tab_layout", "saved_view_pager", "collections_list"));
         // Cold-start landing-page redirect.
         observer.addOnGlobalLayoutListener(new LandingWatcher(root));
         // Skip the blocked Reels page when swiping between Home and Messages.
