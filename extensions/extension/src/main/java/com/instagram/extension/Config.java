@@ -152,6 +152,8 @@ public final class Config {
 
     public static boolean isSearchPostsBlocked() { return getBlocked("block_search_posts", true); }
 
+    public static boolean isSavedBlocked()       { return getBlocked("block_saved", true); }
+
     /**
      * Whether Instagram's popups (its own toasts: "Couldn't refresh feed",
      * "Impossible d'actualiser le fil", ...) are dropped. On by default: blocking
@@ -232,6 +234,7 @@ public final class Config {
         baseline.put("block_notes", isNotesBlocked());
         baseline.put("block_suggested", isSuggestedBlocked());
         baseline.put("block_ads", isAdsBlocked());
+        baseline.put("block_saved", isSavedBlocked());
         for (String key : NAV_KEYS) {
             baseline.put(key, getBlocked(key, navDefault(key)));
         }
