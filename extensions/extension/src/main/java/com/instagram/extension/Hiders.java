@@ -20,11 +20,22 @@ public final class Hiders {
 
     private Hiders() {}
 
+    /**
+     * The fully Compose inbox bypasses the list-adapter hook below and has no
+     * "cf_hub_recycler_view" view id for {@link VisibilityHider} to hide either,
+     * so when Notes are blocked the classic view-based inbox is forced instead.
+     * Patched in by NotesTrayPatch, which rewrites every place that reads
+     * Instagram's own "use Compose inbox" choice to call this first.
+     */
+    public static boolean useComposeInbox(boolean nativeChoice) {
+        return nativeChoice && !Config.isNotesBlocked();
+    }
+
     /** Install every UI hider and the landing redirect on the tab-bar root. */
     public static void installAll(ViewGroup root) {
         if (root == null) return;
         ViewTreeObserver observer = root.getViewTreeObserver();
-        // Notes tray, Instants entry-points.
+        // Notes tray (also taken out of the inbox's list, see onListUpdate), Instants entry-points.
         observer.addOnGlobalLayoutListener(new VisibilityHider(root, "block_notes", "cf_hub_recycler_view"));
         observer.addOnGlobalLayoutListener(new VisibilityHider(root, "block_instants",
                 "creation_entrypoint", "direct_quick_snap_consumption_preview"));
@@ -139,6 +150,60 @@ public final class Hiders {
             id = resources.getIdentifier(name, "id", "com.instagram.android");
         }
         return id;
+    }
+
+    /**
+     * Whether a row of a list is the Notes tray. The tray's list model is
+     * obfuscated, so NotesTrayPatch rewrites this body with a check for it.
+     */
+    static boolean isNotesRow(Object row) {
+        return false;
+    }
+
+    private static java.lang.reflect.Field sUpdateListField;
+
+    /** The single List field of an IgRecyclerViewAdapter list-update object. */
+    private static java.lang.reflect.Field updateListField(Object update) {
+        java.lang.reflect.Field field = sUpdateListField;
+        if (field != null && field.getDeclaringClass() == update.getClass()) return field;
+        for (java.lang.reflect.Field candidate : update.getClass().getDeclaredFields()) {
+            if (java.util.List.class.isAssignableFrom(candidate.getType())
+                    && !java.lang.reflect.Modifier.isStatic(candidate.getModifiers())) {
+                candidate.setAccessible(true);
+                sUpdateListField = candidate;
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Called with every list update an {@code IgRecyclerViewAdapter} applies: takes
+     * the Notes tray out when Notes are blocked. Instagram draws that row either
+     * around {@code cf_hub_recycler_view} or, on some accounts, with Compose and no
+     * resource id at all, so the row itself goes rather than a view.
+     */
+    public static void onListUpdate(Object update) {
+        try {
+            if (update == null || !Config.isNotesBlocked()) return;
+            java.lang.reflect.Field field = updateListField(update);
+            if (field == null) return;
+            @SuppressWarnings("unchecked")
+            java.util.List<Object> rows = (java.util.List<Object>) field.get(update);
+            if (rows == null) return;
+            java.util.List<Object> kept = null;
+            for (int i = 0; i < rows.size(); i++) {
+                Object row = rows.get(i);
+                if (isNotesRow(row)) {
+                    if (kept == null) kept = new java.util.ArrayList<>(rows.subList(0, i));
+                } else if (kept != null) {
+                    kept.add(row);
+                }
+            }
+            if (kept != null) field.set(update, kept);
+        } catch (Throwable ignored) {
+            // the list goes through as Instagram built it
+        }
     }
 
     /**
